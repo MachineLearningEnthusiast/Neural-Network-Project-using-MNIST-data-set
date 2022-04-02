@@ -1,150 +1,110 @@
 import random
 import numpy as np
-import pandas as pd
-from sklearn.datasets import load_digits
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.datasets import mnist
+(X_train, Y_train), (X_test, Y_test) = mnist.load_data()
 
-#Neural_network_structure input is a list of neurons in each layer from left to right. Note structure is made to suit
-#Scikit learn dataset which is 8x8 (64 pixels total) so that means the list must take the form of [64,...,10] where
-#"..." can take on any number / form of layers.
-#Learning factor is the penalty applied to the weights and biases of connections 
-#Test fraction is a float between 0 and 1 where 0.5 would mean half of the sample is for testing
-#Random state makes it so we get the same data set each time
+X_train, X_test = np.reshape(X_train, (60000,784)), np.reshape(X_test, (10000, 784))
 
+Y_train, Y_test = np.reshape(Y_train, (60000, 1)), np.reshape(Y_test, (10000, 1))
+
+X_train_average = np.average(X_train, axis = 1)
+X_train_average = np.expand_dims(X_train_average, axis = 1)
+
+X_test_average = np.average(X_test, axis = 1)
+X_test_average = np.expand_dims(X_test_average, axis = 1)
+
+X_train = np.subtract(X_train, X_train_average)
+X_test = np.subtract(X_test, X_test_average)
+
+X_test_sd = np.std(X_test, axis = 1)
+X_test_sd = np.expand_dims(X_test_sd, axis = 1)
+X_test = np.true_divide(X_test, X_test_sd)
+
+X_train_sd = np.std(X_train, axis = 1)
+X_train_sd = np.expand_dims(X_train_sd, axis = 1)
+X_train = np.true_divide(X_train, X_train_sd)
+
+ 
+X_test = np.expand_dims(X_test, axis = 2)
+X_train = np.expand_dims(X_train, axis = 2)
+
+Zip_test = list(zip(X_test, Y_test))
+Zip_train = list(zip(X_train, Y_train))
+
+def Sigmoid(z):
+    return 1.0/(1.0+np.exp(-z))
+
+def Sigmoid_deriv(z):
+    return Sigmoid(z)*(1-Sigmoid(z))
+
+class Neural_network:
+    def __init__(self, NN_structure):
+        self.Biases = [np.random.rand(a, 1) for a in NN_structure[1:]]
+        self.Weights = [np.random.rand(b, a) for a, b in zip(NN_structure[:-1],NN_structure[1:])]
+        self.NN_number_of_layers = len(NN_structure)
+        self.NN_structure = NN_structure
         
-def Convert_each_element_in_y_train_to_an_1x10_output_array(y_train, Data_point):
-    y_train_1x10 = np.zeros((1,10))
-    index = y_train[Data_point]
-    y_train_1x10[0][index] = 1
-    return np.transpose(y_train_1x10)
-
-
-def Convert_each_element_in_y_test_to_an_1x10_output_array(y_test, Data_point):
-    y_test_1x10 = np.zeros((1,10))
-    index = y_test[Data_point]
-    y_test_1x10[0][index] = 1
-    return y_test_1x10
-
-
-def Normalize_data_set(Data_set_to_normalize):
-    Normalized_set_point = StandardScaler().fit_transform(Data_set_to_normalize)
-    return Normalized_set_point
-
-def Creating_biases_and_weights(Neural_network_structure):
-    Weights = {}
-    Biases = {}
-    for i in range(1, len(Neural_network_structure)):
-            Weights[i] = np.random.rand(Neural_network_structure[i], Neural_network_structure[i-1])
-            Biases[i] = np.random.rand(Neural_network_structure[i], 1)
-            #Biases[i] = random.random()
-    return Weights, Biases
-
-def Resetting_update_biases_and_weights(Neural_network_structure):
-    Update_w = {}
-    Update_b = {}
-    for i in range(1, len(Neural_network_structure)):
-        Update_w[i] = np.zeros((Neural_network_structure[i], Neural_network_structure[i-1]))
-        #Update_b[i] = 0
-        Update_b[i] = np.zeros((Neural_network_structure[i], 1))
-    return Update_w, Update_b
-
-
-
-def Sigma_back_prop_term_out_most_layer(b_last_layer, c_last_layer, y_data_point):
-    return -(y_data_point - c_last_layer) * Sigmoid_deriv(b_last_layer)
-
-def Sigma_back_prop_hidden_layers(Weights, b, Sigma_add1):
-    return (np.dot(np.transpose(Weights), Sigma_add1)) * Sigmoid_deriv(b)
-
-
-def Sigmoid(x):
-    return 1 / (1 + np.exp(-x))
-    
-def Sigmoid_deriv(x):
-    return Sigmoid(x) * (1 - Sigmoid(x))
-
-
-def Feed_forward(X_single_data_point, Weights, Biases, Neural_network_structure):
-    b = {}
-    c = {}
-    
-    for i in range(len(Neural_network_structure)):
-        if i == 0:
-            c[0] = X_single_data_point             
-        else:
-            b[i] = np.dot(Weights[i], c[i-1]) + Biases[i]
-            c[i] = Sigmoid(b[i])    
-    return b, c
-
-def Neural_Network_MNIST(Neural_network_structure, Learning_factor, Test_fraction):
-    #Loading digits and splitting them up into datasets
-    #Still need to normalize the data.
-    digits = load_digits()
-    digits_X, digits_y = digits["data"], digits["target"]
-    X_train, X_test, y_train, y_test = train_test_split(digits_X, digits_y, test_size = Test_fraction)
-    
-    X_train = Normalize_data_set(X_train)
-    
-    Weights, Biases = Creating_biases_and_weights(Neural_network_structure)
-    Cost_function_average = []
-    Iteration_number = 0
-    Training_set_size = len(y_train)
-    
-    while Iteration_number <= Training_set_size:
-        Average_cost = 0
-        Update_w, Update_b = Resetting_update_biases_and_weights(Neural_network_structure)
-    
-        for i in range(Training_set_size):
-            Sigma = {}
-            b, c = Feed_forward(X_train[i][:, np.newaxis], Weights, Biases, Neural_network_structure)
-            
-            y_data_point = Convert_each_element_in_y_train_to_an_1x10_output_array(y_train, i)
-            #middle 1 was a zero checkkk!!!!
-            for j in range(len(Neural_network_structure)-1, -1, -1):
-                if j == len(Neural_network_structure) - 1:
-                    Average_cost += np.linalg.norm((y_data_point-c[j])) 
-                    Sigma[j] = Sigma_back_prop_term_out_most_layer(b[j], c[j], y_data_point) 
-                else:
-                    if j > 0:
-                        Sigma[j] = Sigma_back_prop_hidden_layers(Weights[j+1], b[j], Sigma[j+1]) 
-                        if j > -1 and j < 3:
-                            Update_b[j+1] += Sigma[j+1]
-                            Update_w[j+1] += np.dot(Sigma[j+1], np.transpose(c[j]))
+    def Making_batches(self, Batch_size):
+        random.shuffle(Zip_train)
+        Batches_train = [Zip_train[i:i+Batch_size] for i in range(0, len(Zip_train), Batch_size)]
+        return Batches_train
         
-        for k in range(len(Neural_network_structure)-1,0,-1):
-            Biases[k] -= Learning_factor * ((1 / Training_set_size) * Update_b[k])
-            Weights[k] -= Learning_factor * ((1 / Training_set_size) * Update_w[k])
-        
-        Iteration_number += 1 
-        Average_cost = (1 / Training_set_size) * Average_cost
-        Cost_function_average.append(Average_cost)
-    return Cost_function_average, Weights, Biases, X_test, y_test
-
-
-
-Cost_function_average, Weights, Biases, X_test, y_test = Neural_Network_MNIST([64,32,10], 0.25, 0.76)
-print(Cost_function_average)
-plt.plot(np.arange(0, len(Cost_function_average), 1), Cost_function_average)
-plt.xlabel("Iteration Number")
-plt.ylabel("Cost")
-plt.show()
-print(y_test[0:3])
-print(X_test[0:3])
-
-def Test_NN(Weights, Biases, X_test, y_test, Neural_network_structure):
-    Correctly_predicted = 0
-    Training_set_size = len(y_test)
-    X_test = Normalize_data_set(X_test)
+    #Where c is the input layer
+    def Feedforward(self, c):
+        for w, b in zip(self.Weights, self.Biases):            
+            c = Sigmoid(np.dot(w, c) + b)
+        return c
     
-    for i in range(len(y_test)):
-        b, c = Feed_forward(X_test[i][:, np.newaxis], Weights, Biases, Neural_network_structure)
-        NN_predicted_index = np.argmax(c[len(Neural_network_structure)-1])
-        if NN_predicted_index == y_test[i]:
-            Correctly_predicted += 1
-    Ratio_of_correctly_predicted_to_total_tests = Correctly_predicted / Training_set_size
-    return Correctly_predicted, Ratio_of_correctly_predicted_to_total_tests
-        
-Correctly_predicted, Ratio_of_correctly_predicted_to_total_tests = Test_NN(Weights, Biases, X_test, y_test, [64,32,10])      
-print(Correctly_predicted, Ratio_of_correctly_predicted_to_total_tests)
+    def Matrix_Y(self, Y):
+        Y_matrix = np.zeros((10,1))
+        Y_matrix[Y] = 1
+        return Y_matrix
+           
+    def Cost_derivative(self, Y, Last_layer_activation):
+        return (Last_layer_activation - self.Matrix_Y(Y))
+           
+    def Back_Propagation(self, X_data_point, Y_data_point):
+        Vectors = []
+        Activation = X_data_point
+        List_of_activations = [X_data_point]
+        Change_weights = [np.zeros(np.shape(p)) for p in self.Weights] 
+        Change_biases = [np.zeros(np.shape(q)) for q in self.Biases]
+        for w, b in zip(self.Weights, self.Biases):
+            Vector = np.dot(w, Activation) + b
+            Vectors.append(Vector)
+            Activation = Sigmoid(Vector)
+            List_of_activations.append(Activation)
+        Delta = self.Cost_derivative(Y_data_point, List_of_activations[-1]) * Sigmoid_deriv(Vectors[-1])
+        Change_weights[-1] = np.dot(Delta, np.transpose(List_of_activations[-2]))      
+        Change_biases[-1] = Delta
+        for i in range(self.NN_number_of_layers-2, 0, -1):
+            Vector = Vectors[i-1]
+            Activation = Sigmoid_deriv(Vector)
+            Delta = np.dot(np.transpose(self.Weights[i]), Delta) * Activation
+            Change_weights[i-1] = np.dot(Delta, np.transpose(List_of_activations[i-1]))
+            Change_biases[i-1] = Delta
+        return Change_weights, Change_biases
+  
+    def SGD(self, Batch_size, Learning_rate):
+        Batches = self.Making_batches(Batch_size)
+        Batch_number = 0
+        for i in Batches:
+            Batch_number += 1
+            Correctly_predicted = 0 
+            Sum_change_weights = [np.zeros(np.shape(n)) for n in self.Weights]
+            Sum_change_biases = [np.zeros(np.shape(o)) for o in self.Biases]  
+            for j in range(len(i)):
+                Change_weights, Change_biases = self.Back_Propagation(i[j][0], i[j][1])
+                Sum_change_weights = [u + h for u,h in zip(Change_weights, Sum_change_weights)]
+                Sum_change_biases = [u + h for u,h in zip(Change_biases, Sum_change_biases)]
+            self.Weights = [c - ((Learning_rate / Batch_size) * v) for c,v in zip(self.Weights, Sum_change_weights)]
+            self.Biases = [c - ((Learning_rate / Batch_size) * v) for c,v in zip(self.Biases, Sum_change_biases)]
+            for k, l in Zip_test:                
+                c = self.Feedforward(k)
+                if l[0] == np.argmax(c):
+                    Correctly_predicted += 1                
+            print("Batch {0} correctly predicted {1} / 10000".format(Batch_number, Correctly_predicted))
+                       
+NN = Neural_network([784,30,10])
+NN.SGD(10,10)
